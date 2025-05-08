@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import SettingsPanel from './SettingsPanel.jsx'
 import Editor from 'react-simple-code-editor'
 import Prism from 'prismjs'
+import ReactMarkdown from 'react-markdown'
 import 'prismjs/themes/prism-tomorrow.css'
 import 'prismjs/components/prism-markup.min.js'
+import './styles.css'
 
 function App() {
   const [prompt, setPrompt] = useState('')
@@ -11,42 +13,11 @@ function App() {
   const [model, setModel] = useState('')
   const [assistants, setAssistants] = useState([])
   const [currentAssistantId, setCurrentAssistantId] = useState('new')
+  const [assistantName, setAssistantName] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isReady, setIsReady] = useState(false)
-
   const [messagesHistory, setMessagesHistory] = useState([])
   const [loading, setLoading] = useState(false)
-
-  // Fonction pour parser le texte/code dans les réponses
-  function parseResponse(content) {
-    const regex = /```(?:\w+)?\n([\s\S]*?)```/g
-    let parts = []
-    let lastIndex = 0
-    let match
-
-    while ((match = regex.exec(content)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({
-          type: 'text',
-          content: content.substring(lastIndex, match.index),
-        })
-      }
-      parts.push({
-        type: 'code',
-        content: match[1],
-      })
-      lastIndex = regex.lastIndex
-    }
-
-    if (lastIndex < content.length) {
-      parts.push({
-        type: 'text',
-        content: content.substring(lastIndex),
-      })
-    }
-
-    return parts
-  }
 
   useEffect(() => {
     const savedAssistants = JSON.parse(localStorage.getItem('assistants')) || []
@@ -58,13 +29,6 @@ function App() {
       setSystemPrompt(first.systemPrompt)
       setCurrentAssistantId(first.id)
       setMessagesHistory([{ role: 'system', content: first.systemPrompt }])
-    } else {
-      setAssistants([])
-      setModel('')
-      setSystemPrompt('')
-      setAssistantName('')
-      setCurrentAssistantId('new')
-      setMessagesHistory([])
     }
     setIsReady(true)
   }, [])
@@ -74,8 +38,6 @@ function App() {
       localStorage.setItem('assistants', JSON.stringify(assistants))
     }
   }, [assistants, isReady])
-
-  const [assistantName, setAssistantName] = useState('')
 
   const toggleSettings = () => {
     setIsSettingsOpen(!isSettingsOpen)
@@ -112,7 +74,6 @@ function App() {
     setModel(updatedAssistant.model)
     setSystemPrompt(updatedAssistant.systemPrompt)
 
-    // Reset conversation quand on change de settings
     setMessagesHistory([{ role: 'system', content: updatedAssistant.systemPrompt }])
   }
 
@@ -135,16 +96,43 @@ function App() {
     }
   }
 
+  const parseResponse = (content) => {
+    const regex = /```(?:\w+)?\n([\s\S]*?)```/g
+    let parts = []
+    let lastIndex = 0
+    let match
+
+    while ((match = regex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({
+          type: 'text',
+          content: content.substring(lastIndex, match.index),
+        })
+      }
+      parts.push({
+        type: 'code',
+        content: match[1],
+      })
+      lastIndex = regex.lastIndex
+    }
+
+    if (lastIndex < content.length) {
+      parts.push({
+        type: 'text',
+        content: content.substring(lastIndex),
+      })
+    }
+
+    return parts
+  }
+
   const handleSend = async () => {
     if (!prompt.trim()) return
-  
+
     setLoading(true)
-  
-    const newMessages = [
-      ...messagesHistory,
-      { role: 'user', content: prompt }
-    ]
-  
+
+    const newMessages = [...messagesHistory, { role: 'user', content: prompt }]
+
     try {
       const response = await fetch('http://localhost:11434/api/chat', {
         method: 'POST',
@@ -152,22 +140,17 @@ function App() {
         body: JSON.stringify({
           model,
           messages: newMessages,
-          stream: false, // 🚨 Ajout de stream: false ici
-          options: {
-            temperature: 0.7
-          }
-        })
+          stream: false,
+          options: { temperature: 0.7 },
+        }),
       })
-  
+
       const data = await response.json()
-  
+
       const assistantReply = data.message.content
-  
-      const updatedMessages = [
-        ...newMessages,
-        { role: 'assistant', content: assistantReply }
-      ]
-  
+
+      const updatedMessages = [...newMessages, { role: 'assistant', content: assistantReply }]
+
       setMessagesHistory(updatedMessages)
       setPrompt('')
       setLoading(false)
@@ -176,9 +159,6 @@ function App() {
       setLoading(false)
     }
   }
-  
-  
-  
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -190,7 +170,7 @@ function App() {
   return (
     <div className="container">
       <div className="header">
-        <h1>{assistantName || 'Assistant'}</h1>
+        <h1>🤖 {assistantName || 'Assistant'}</h1>
         <button className="settings-button" onClick={toggleSettings}>⚙️</button>
       </div>
 
@@ -208,34 +188,18 @@ function App() {
         onSelectAssistant={handleSelectAssistant}
       />
 
-      <div className="chat-history" style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div className="chat-history">
         {messagesHistory.map((msg, index) => (
-          <div
-            key={index}
-            style={{
-              alignSelf: msg.role === 'user' ? 'flex-start' : 'flex-end',
-              backgroundColor: msg.role === 'user' ? '#d1e7dd' : '#f8d7da',
-              padding: '10px',
-              borderRadius: '8px',
-              maxWidth: '70%',
-              whiteSpace: 'pre-wrap'
-            }}
-          >
-            <strong>{msg.role === 'user' ? '👤 Toi' : '🤖 Assistant'}</strong> :
+          <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+            <div className="chat-meta">
+              <strong>{msg.role === 'user' ? '👤 Toi' : '🤖 Assistant'}</strong> :
+            </div>
             {parseResponse(msg.content).map((part, idx) => (
               part.type === 'code' ? (
-                <div key={idx} style={{ marginTop: '10px' }}>
+                <div key={idx} className="code-block">
                   <button
+                    className="copy-button"
                     onClick={() => navigator.clipboard.writeText(part.content)}
-                    style={{
-                      marginBottom: '5px',
-                      backgroundColor: '#007bff',
-                      color: '#fff',
-                      border: 'none',
-                      padding: '5px 10px',
-                      borderRadius: '5px',
-                      cursor: 'pointer'
-                    }}
                   >
                     📋 Copier ce code
                   </button>
@@ -244,36 +208,45 @@ function App() {
                     onValueChange={() => {}}
                     highlight={code => Prism.highlight(code, Prism.languages.markup, 'markup')}
                     padding={10}
-                    style={{
-                      fontFamily: '"Fira code", "Fira Mono", monospace',
-                      fontSize: 14,
-                      backgroundColor: '#2d2d2d',
-                      color: '#f8f8f2',
-                      borderRadius: '8px',
-                      minHeight: '100px',
-                      pointerEvents: 'none',
-                      userSelect: 'text',
-                    }}
+                    className="editor"
                   />
                 </div>
               ) : (
-                <p key={idx} style={{ marginTop: '10px' }}>{part.content}</p>
+                <ReactMarkdown
+  key={idx}
+  components={{
+    p: ({node, ...props}) => <p className="chat-content" {...props} />,
+    h1: ({node, ...props}) => <h1 className="chat-content" {...props} />,
+    h2: ({node, ...props}) => <h2 className="chat-content" {...props} />,
+    h3: ({node, ...props}) => <h3 className="chat-content" {...props} />,
+    ul: ({node, ...props}) => <ul className="chat-content" {...props} />,
+    ol: ({node, ...props}) => <ol className="chat-content" {...props} />,
+    li: ({node, ...props}) => <li className="chat-content" {...props} />,
+    code: ({node, ...props}) => <code className="chat-content" {...props} />,
+    hr: ({node, ...props}) => <hr className="chat-content" {...props} />,
+  }}
+>
+  {part.content}
+</ReactMarkdown>
+
               )
             ))}
           </div>
         ))}
       </div>
+      <div class="chat-block-input">
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Ton message ici..."
+          className="chat-input"
+        />
 
-      <textarea
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyPress={handleKeyPress}
-        placeholder="Ton message ici..."
-      />
-
-      <button onClick={handleSend} disabled={loading}>
-        {loading ? 'Envoi...' : 'Envoyer'}
-      </button>
+        <button className="send-button" onClick={handleSend} disabled={loading}>
+          {loading ? 'Envoi...' : 'Envoyer'}
+        </button>
+      </div>
     </div>
   )
 }

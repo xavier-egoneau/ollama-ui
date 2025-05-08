@@ -35,17 +35,19 @@ function SettingsPanel({
 
   return (
     <div className={`settings-panel ${isOpen ? 'open' : ''}`}>
-      <h2>Paramètres</h2>
-
-      <label>Choisir un assistant :</label>
-      <select value={currentAssistantId} onChange={(e) => onSelectAssistant(e.target.value)}>
-        {assistants.map((assistant) => (
-          <option key={assistant.id} value={assistant.id}>
-            {assistant.name}
-          </option>
-        ))}
-        <option value="new">➕ Ajouter un nouvel assistant</option>
-      </select>
+        <h2>Paramètres</h2>
+        <div class="form-control">
+            <label>Choisir un assistant :</label>
+            <select value={currentAssistantId} onChange={(e) => onSelectAssistant(e.target.value)}>
+                {assistants.map((assistant) => (
+                <option key={assistant.id} value={assistant.id}>
+                    {assistant.name}
+                </option>
+                ))}
+                <option value="new">➕ Ajouter un nouvel assistant</option>
+            </select>
+        </div>
+        <div class="form-control">
 
       <label>Nom de l'assistant :</label>
       <input
@@ -54,34 +56,38 @@ function SettingsPanel({
         onChange={(e) => setAssistantName(e.target.value)}
         placeholder="Nom de l'assistant"
       />
+        </div>
+        <div class="form-control">
 
-      <label>Modèle :</label>
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-            <option value="" disabled>Sélectionnez un modèle</option> {/* 🔥 Option par défaut */}
-            {models.length > 0 ? (
-                models.map((m) => (
-                <option key={m} value={m}>
-                    {m}
-                </option>
-                ))
-            ) : (
-                <option disabled>Chargement...</option>
-            )}
-        </select>
+        <label>Modèle :</label>
+            <select value={model} onChange={(e) => setModel(e.target.value)}>
+                <option value="" disabled>Sélectionnez un modèle</option> {/* 🔥 Option par défaut */}
+                {models.length > 0 ? (
+                    models.map((m) => (
+                    <option key={m} value={m}>
+                        {m}
+                    </option>
+                    ))
+                ) : (
+                    <option disabled>Chargement...</option>
+                )}
+            </select>
+        </div>
+        <div class="form-control">
+            <label>Prompt système :</label>
+            <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="Prompt système" rows={4} cols={50} maxLength={5000} // Ajout de maxLength
+            />
+        </div>
 
-      <label>Prompt système :</label>
-      <textarea
-        value={systemPrompt}
-        onChange={(e) => setSystemPrompt(e.target.value)}
-        placeholder="Prompt système"
-      />
-
-<button onClick={onSaveAssistant}>
+<button onClick={onSaveAssistant} class="save-button">
   {currentAssistantId && currentAssistantId !== 'new' ? 'Modifier Assistant' : 'Créer Assistant'}
 </button>
 
 {currentAssistantId && currentAssistantId !== 'new' && (
-  <button onClick={onDeleteAssistant} style={{ marginTop: '1rem', backgroundColor: 'red', color: 'white' }}>
+  <button onClick={onDeleteAssistant} class="delete-button">
     🗑️ Supprimer Assistant
   </button>
 )}
