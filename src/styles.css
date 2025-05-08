@@ -1,11 +1,19 @@
 /* Container principal */
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh; /* Make sure the container takes up the full viewport height */
+}
+
+.chat-history {
+  flex-grow: 1; /* Allow the chat history to grow and take up available space */
+  overflow-y: auto; /* Enable scrolling for long chat histories */
+}
+
+.input-area {
+  /* Add styles to keep the input area at the bottom */
+  padding: 10px;
+  background-color: #282c34; /* Adjust as needed */
 }
 
 /* Header */
@@ -173,11 +181,10 @@ body{
   background-color: #262626;
   border-color: #262626;
   color: #a3a3a3;
-  position: fixed;
-  top: 0;
-  right: 0;
+  position: relative;
+
   width: 300px;
-  height: 100vh;
+  height: auto;
   padding: 20px;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
 }
@@ -216,15 +223,15 @@ body{
   box-sizing: border-box;
 } 
 .settings-panel{
-  top: 0;
-  right: -350px;
-  transition: right 0.3s ease-in-out;
+  width: 300px;
+  margin-right: -400px;
+  transition: margin 0.3s ease-in-out;
 }
 
 .settings-panel.open{
-  top: 0;
-  right: 0;
-  transition: right 0.3s ease-in-out;
+  width: 300px;
+  margin-right: 0px;
+  transition: margin 0.3s ease-in-out;
 }
 .save-button{
   border: 1px solid #222;
@@ -272,15 +279,35 @@ body{
 .send-button{
   position: absolute;
     bottom: 12px;
-    right: 12px;
+    right: 18%;
     margin-top: 0;
 }
 .chat-block-input{
   display: flex;
-  position: relative;
   flex-direction: row;
   flex-wrap: nowrap;
   align-content: center;
   justify-content: space-between;
   align-items: center;
+
+  position: fixed;
+  width: 100%;
+  bottom: 20px;
+  left: 0;
+}
+.chat-block-input textarea{
+  width: 60%;
+  margin: 0 auto;
+}
+
+.flex{
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-content: center;
+  justify-content: space-between;
+  align-items: center;
+}
+.over-hiden{
+  overflow: hidden;
 }

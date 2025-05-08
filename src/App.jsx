@@ -173,66 +173,68 @@ function App() {
         <h1>🤖 {assistantName || 'Assistant'}</h1>
         <button className="settings-button" onClick={toggleSettings}>⚙️</button>
       </div>
+      <div class="flex over-hiden">
+        <div className="chat-history">
+          {messagesHistory.map((msg, index) => (
+            <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+              <div className="chat-meta">
+                <strong>{msg.role === 'user' ? '👤 Toi' : '🤖 Assistant'}</strong> :
+              </div>
+              {parseResponse(msg.content).map((part, idx) => (
+                part.type === 'code' ? (
+                  <div key={idx} className="code-block">
+                    <button
+                      className="copy-button"
+                      onClick={() => navigator.clipboard.writeText(part.content)}
+                    >
+                      📋 Copier ce code
+                    </button>
+                    <Editor
+                      value={part.content}
+                      onValueChange={() => {}}
+                      highlight={code => Prism.highlight(code, Prism.languages.markup, 'markup')}
+                      padding={10}
+                      className="editor"
+                    />
+                  </div>
+                ) : (
+                  <ReactMarkdown
+    key={idx}
+    components={{
+      p: ({node, ...props}) => <p className="chat-content" {...props} />,
+      h1: ({node, ...props}) => <h1 className="chat-content" {...props} />,
+      h2: ({node, ...props}) => <h2 className="chat-content" {...props} />,
+      h3: ({node, ...props}) => <h3 className="chat-content" {...props} />,
+      ul: ({node, ...props}) => <ul className="chat-content" {...props} />,
+      ol: ({node, ...props}) => <ol className="chat-content" {...props} />,
+      li: ({node, ...props}) => <li className="chat-content" {...props} />,
+      code: ({node, ...props}) => <code className="chat-content" {...props} />,
+      hr: ({node, ...props}) => <hr className="chat-content" {...props} />,
+    }}
+  >
+    {part.content}
+  </ReactMarkdown>
 
-      <SettingsPanel
-        isOpen={isSettingsOpen}
-        assistantName={assistantName}
-        setAssistantName={setAssistantName}
-        systemPrompt={systemPrompt}
-        setSystemPrompt={setSystemPrompt}
-        model={model}
-        setModel={setModel}
-        onSaveAssistant={handleSaveAssistant}
-        assistants={assistants}
-        currentAssistantId={currentAssistantId}
-        onSelectAssistant={handleSelectAssistant}
-      />
-
-      <div className="chat-history">
-        {messagesHistory.map((msg, index) => (
-          <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
-            <div className="chat-meta">
-              <strong>{msg.role === 'user' ? '👤 Toi' : '🤖 Assistant'}</strong> :
+                )
+              ))}
             </div>
-            {parseResponse(msg.content).map((part, idx) => (
-              part.type === 'code' ? (
-                <div key={idx} className="code-block">
-                  <button
-                    className="copy-button"
-                    onClick={() => navigator.clipboard.writeText(part.content)}
-                  >
-                    📋 Copier ce code
-                  </button>
-                  <Editor
-                    value={part.content}
-                    onValueChange={() => {}}
-                    highlight={code => Prism.highlight(code, Prism.languages.markup, 'markup')}
-                    padding={10}
-                    className="editor"
-                  />
-                </div>
-              ) : (
-                <ReactMarkdown
-  key={idx}
-  components={{
-    p: ({node, ...props}) => <p className="chat-content" {...props} />,
-    h1: ({node, ...props}) => <h1 className="chat-content" {...props} />,
-    h2: ({node, ...props}) => <h2 className="chat-content" {...props} />,
-    h3: ({node, ...props}) => <h3 className="chat-content" {...props} />,
-    ul: ({node, ...props}) => <ul className="chat-content" {...props} />,
-    ol: ({node, ...props}) => <ol className="chat-content" {...props} />,
-    li: ({node, ...props}) => <li className="chat-content" {...props} />,
-    code: ({node, ...props}) => <code className="chat-content" {...props} />,
-    hr: ({node, ...props}) => <hr className="chat-content" {...props} />,
-  }}
->
-  {part.content}
-</ReactMarkdown>
+          ))}
+        </div>
+        <SettingsPanel
+          isOpen={isSettingsOpen}
+          assistantName={assistantName}
+          setAssistantName={setAssistantName}
+          systemPrompt={systemPrompt}
+          setSystemPrompt={setSystemPrompt}
+          model={model}
+          setModel={setModel}
+          onSaveAssistant={handleSaveAssistant}
+          assistants={assistants}
+          currentAssistantId={currentAssistantId}
+          onSelectAssistant={handleSelectAssistant}
+        />
 
-              )
-            ))}
-          </div>
-        ))}
+        
       </div>
       <div class="chat-block-input">
         <textarea
