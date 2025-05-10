@@ -6,6 +6,8 @@ import ReactMarkdown from 'react-markdown'
 import 'prismjs/themes/prism-tomorrow.css'
 import 'prismjs/components/prism-markup.min.js'
 import './styles.css'
+import { extractTextFromDocument, readTextFromFile } from './documentUtils.js'
+import { saveDocument, getDocumentsByIds } from './db.js'
 
 function App() {
   const [prompt, setPrompt] = useState('')
@@ -14,6 +16,7 @@ function App() {
   const [assistants, setAssistants] = useState([])
   const [currentAssistantId, setCurrentAssistantId] = useState('new')
   const [assistantName, setAssistantName] = useState('')
+  const [assistantDocuments, setAssistantDocuments] = useState([])
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [messagesHistory, setMessagesHistory] = useState([])
@@ -29,6 +32,9 @@ function App() {
       setSystemPrompt(first.systemPrompt)
       setCurrentAssistantId(first.id)
       setMessagesHistory([{ role: 'system', content: first.systemPrompt }])
+      getDocumentsByIds(first.documents || []).then((docs) => {
+        setAssistantDocuments(docs)
+      })
     }
     setIsReady(true)
   }, [])
@@ -56,6 +62,9 @@ function App() {
       name: assistantName.trim(),
       model: model || '',
       systemPrompt: systemPrompt.trim() || '',
+      documents: assistantDocuments.map(doc =>
+        typeof doc === 'object' && doc !== null ? doc.id : doc
+      )
     }
 
     const existingIndex = assistants.findIndex(a => a.id === updatedAssistant.id)
@@ -73,15 +82,15 @@ function App() {
     setAssistantName(updatedAssistant.name)
     setModel(updatedAssistant.model)
     setSystemPrompt(updatedAssistant.systemPrompt)
-
     setMessagesHistory([{ role: 'system', content: updatedAssistant.systemPrompt }])
   }
 
-  const handleSelectAssistant = (id) => {
+  const handleSelectAssistant = async (id) => {
     if (id === 'new') {
       setAssistantName('')
       setModel('')
       setSystemPrompt('')
+      setAssistantDocuments([]) // 🧹 vide les documents précédents
       setCurrentAssistantId('new')
       setMessagesHistory([])
     } else {
@@ -92,9 +101,26 @@ function App() {
         setSystemPrompt(selected.systemPrompt)
         setCurrentAssistantId(selected.id)
         setMessagesHistory([{ role: 'system', content: selected.systemPrompt }])
+        const docs = await getDocumentsByIds(selected.documents || [])
+        setAssistantDocuments(docs.map(doc => ({ ...doc })))
       }
     }
   }
+
+  const handleUploadDocuments = async (files) => {
+    const ids = await Promise.all(
+      files.map(async (file) => {
+        const text = await readTextFromFile(file)
+        const doc = { name: file.name, text }
+        const id = await saveDocument(doc) // ← correction ici
+        return id
+      })
+    )
+    setAssistantDocuments(prev => [...prev, ...ids])
+    return ids
+  }
+
+
 
   const parseResponse = (content) => {
     const regex = /```(?:\w+)?\n([\s\S]*?)```/g
@@ -104,23 +130,14 @@ function App() {
 
     while ((match = regex.exec(content)) !== null) {
       if (match.index > lastIndex) {
-        parts.push({
-          type: 'text',
-          content: content.substring(lastIndex, match.index),
-        })
+        parts.push({ type: 'text', content: content.substring(lastIndex, match.index) })
       }
-      parts.push({
-        type: 'code',
-        content: match[1],
-      })
+      parts.push({ type: 'code', content: match[1] })
       lastIndex = regex.lastIndex
     }
 
     if (lastIndex < content.length) {
-      parts.push({
-        type: 'text',
-        content: content.substring(lastIndex),
-      })
+      parts.push({ type: 'text', content: content.substring(lastIndex) })
     }
 
     return parts
@@ -128,10 +145,16 @@ function App() {
 
   const handleSend = async () => {
     if (!prompt.trim()) return
-
     setLoading(true)
 
-    const newMessages = [...messagesHistory, { role: 'user', content: prompt }]
+    let contextText = ''
+    if (assistantDocuments?.length) {
+      const docs = await getDocumentsByIds(assistantDocuments)
+      const texts = docs.map(doc => doc.text || '')
+      contextText = texts.filter(Boolean).join('\n\n')
+    }
+
+    const enrichedPrompt = contextText ? `${contextText}\n\n${prompt}` : prompt
 
     try {
       const response = await fetch('http://localhost:11434/api/chat', {
@@ -139,19 +162,18 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
-          messages: newMessages,
+          messages: [
+            ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+            { role: 'user', content: enrichedPrompt },
+          ],
           stream: false,
           options: { temperature: 0.7 },
         }),
       })
 
       const data = await response.json()
-
       const assistantReply = data.message.content
-
-      const updatedMessages = [...newMessages, { role: 'assistant', content: assistantReply }]
-
-      setMessagesHistory(updatedMessages)
+      setMessagesHistory([...messagesHistory, { role: 'user', content: prompt }, { role: 'assistant', content: assistantReply }])
       setPrompt('')
       setLoading(false)
     } catch (error) {
@@ -171,9 +193,9 @@ function App() {
     <div className="container">
       <div className="header">
         <h1>🤖 {assistantName || 'Assistant'}</h1>
-        <button className="settings-button" onClick={toggleSettings}>⚙️</button>
+       
       </div>
-      <div class="flex over-hiden">
+      <div className="flex">
         <div className="chat-history">
           {messagesHistory.map((msg, index) => (
             <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
@@ -199,22 +221,21 @@ function App() {
                   </div>
                 ) : (
                   <ReactMarkdown
-    key={idx}
-    components={{
-      p: ({node, ...props}) => <p className="chat-content" {...props} />,
-      h1: ({node, ...props}) => <h1 className="chat-content" {...props} />,
-      h2: ({node, ...props}) => <h2 className="chat-content" {...props} />,
-      h3: ({node, ...props}) => <h3 className="chat-content" {...props} />,
-      ul: ({node, ...props}) => <ul className="chat-content" {...props} />,
-      ol: ({node, ...props}) => <ol className="chat-content" {...props} />,
-      li: ({node, ...props}) => <li className="chat-content" {...props} />,
-      code: ({node, ...props}) => <code className="chat-content" {...props} />,
-      hr: ({node, ...props}) => <hr className="chat-content" {...props} />,
-    }}
-  >
-    {part.content}
-  </ReactMarkdown>
-
+                    key={idx}
+                    components={{
+                      p: ({ node, ...props }) => <p className="chat-content" {...props} />,
+                      h1: ({ node, ...props }) => <h1 className="chat-content" {...props} />,
+                      h2: ({ node, ...props }) => <h2 className="chat-content" {...props} />,
+                      h3: ({ node, ...props }) => <h3 className="chat-content" {...props} />,
+                      ul: ({ node, ...props }) => <ul className="chat-content" {...props} />,
+                      ol: ({ node, ...props }) => <ol className="chat-content" {...props} />,
+                      li: ({ node, ...props }) => <li className="chat-content" {...props} />,
+                      code: ({ node, ...props }) => <code className="chat-content" {...props} />,
+                      hr: ({ node, ...props }) => <hr className="chat-content" {...props} />,
+                    }}
+                  >
+                    {part.content}
+                  </ReactMarkdown>
                 )
               ))}
             </div>
@@ -232,11 +253,22 @@ function App() {
           assistants={assistants}
           currentAssistantId={currentAssistantId}
           onSelectAssistant={handleSelectAssistant}
+          onDeleteAssistant={() => {
+            const updated = assistants.filter(a => a.id !== currentAssistantId)
+            setAssistants(updated)
+            setCurrentAssistantId('new')
+            setAssistantName('')
+            setModel('')
+            setSystemPrompt('')
+            setAssistantDocuments([])
+            setMessagesHistory([])
+          }}
+          assistantDocuments={assistantDocuments}
+          setAssistantDocuments={setAssistantDocuments}
+          onUploadDocuments={handleUploadDocuments}
         />
-
-        
       </div>
-      <div class="chat-block-input">
+      <div className="chat-block-input">
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -244,7 +276,6 @@ function App() {
           placeholder="Ton message ici..."
           className="chat-input"
         />
-
         <button className="send-button" onClick={handleSend} disabled={loading}>
           {loading ? 'Envoi...' : 'Envoyer'}
         </button>

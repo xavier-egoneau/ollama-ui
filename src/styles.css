@@ -37,6 +37,7 @@
   flex-direction: column;
   gap: 20px;
   flex-grow: 1;
+      padding-bottom: 100px;
 }
 
 /* Chaque message */
@@ -224,15 +225,11 @@ body{
 } 
 .settings-panel{
   width: 300px;
-  margin-right: -400px;
-  transition: margin 0.3s ease-in-out;
-}
-
-.settings-panel.open{
-  width: 300px;
   margin-right: 0px;
   transition: margin 0.3s ease-in-out;
 }
+
+
 .save-button{
   border: 1px solid #222;
   padding: 6px 12px;

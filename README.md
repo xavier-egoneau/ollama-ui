@@ -1,12 +1,18 @@
-# React + Vite
+# 🧠 Assistant IA local + RAG
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-Currently, two official plugins are available:
+## ✅ Prérequis
+- Windows 10 ou 11
+- Une connexion internet pour la première installation
+- **Ollama installé sur votre ordinateur**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## 🛠️ Étape 1 : Installer Ollama (obligatoire)
+1. installer Node.js LTS depuis https://nodejs.org/
+2. Téléchargez et installez **Ollama pour Windows** https://ollama.com/download
+3. Une fois installé, lancez Ollama. l'application en a besoin pour marcher.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+# Let's go
+- Double clicker sur start.bat pour lancer l'app et ouvre http://localhost:5174/ dans votre navigateur. 
