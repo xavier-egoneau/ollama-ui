@@ -38,6 +38,8 @@
   gap: 20px;
   flex-grow: 1;
       padding-bottom: 100px;
+      padding-left: 100px;
+    padding-right: 100px;
 }
 
 /* Chaque message */
@@ -185,6 +187,7 @@ body{
   position: relative;
 
   width: 300px;
+  min-width: 300px;
   height: auto;
   padding: 20px;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
@@ -307,4 +310,34 @@ body{
 }
 .over-hiden{
   overflow: hidden;
+}
+
+.chat-content img {
+  display: block;
+  margin: 1rem auto;
+  max-width: 100%;
+  border-radius: 10px;
+}
+
+.code-block {
+  background-color: #2d2d2d;
+  color: #f8f8f2;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  position: relative;
+  overflow-x: auto;
+}
+
+.copy-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #007bff;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
 }
