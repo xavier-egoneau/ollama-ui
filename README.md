@@ -100,3 +100,5 @@ Ouvre ensuite : http://localhost:5174/
 
 ## dev mode css
   npx gulp watch
+
+  ![alt text](./preview.jpg)
