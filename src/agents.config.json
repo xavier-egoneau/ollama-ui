@@ -1,0 +1,14 @@
+{
+  "image": {
+    "description": "Génère des images",
+    "enrichWithLLM": true,
+    "outputType": "image",
+    "execution": "post"
+  },
+  "calc": {
+    "description": "Calcul mathématique",
+    "enrichWithLLM": false,
+    "outputType": "texte",
+    "execution": "inline"
+  }
+}

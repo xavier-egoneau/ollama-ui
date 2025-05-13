@@ -1,40 +1,32 @@
-// App.jsx
-// Ce composant principal gère l'interface, la logique des assistants IA, les documents associés, et le dialogue avec l'API (texte ou image).
-
-import { useState, useEffect } from 'react';
-import SettingsPanel from './SettingsPanel.jsx';
-import ReactMarkdown from 'react-markdown';
+// App.jsx (version complète, logique + UI)
+import { useState, useEffect } from 'react'
+import SettingsPanel from './SettingsPanel.jsx'
+import ReactMarkdown from 'react-markdown'
+import Prism from 'prismjs';
 import rehypePrism from 'rehype-prism-plus';
 import 'prismjs/themes/prism-tomorrow.css';
-import './styles.css'
+import './styles.min.css'
+import remarkGfm from 'remark-gfm';
 import { extractTextFromDocument, readTextFromFile } from './documentUtils.js'
 import { saveDocument, getDocumentsByIds } from './db.js'
-import { generateImage } from './api.js';
-
-
+import { loadAgentConfigs, extractAgentCommands, executeAgent, buildAgentInstructionPrompt } from './router.js'
 
 
 function App() {
-  // États de l'application
-  const [prompt, setPrompt] = useState('') // prompt utilisateur
-  const [systemPrompt, setSystemPrompt] = useState('') // prompt système (défini par l'utilisateur)
-  const [model, setModel] = useState('') // modèle IA utilisé
-  const [assistants, setAssistants] = useState([]) // tous les assistants enregistrés
-  const [currentAssistantId, setCurrentAssistantId] = useState('new') // ID de l'assistant actif
-  const [assistantName, setAssistantName] = useState('') // nom de l'assistant actif
-  const [assistantDocuments, setAssistantDocuments] = useState([]) // documents associés à l'assistant
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false) // toggle panneau de configuration
-  const [isReady, setIsReady] = useState(false) // indicateur que les données sont chargées
-  const [messagesHistory, setMessagesHistory] = useState([]) // historique du chat
-  const [loading, setLoading] = useState(false) // état de chargement de réponse
-  const [outputType, setOutputType] = useState('texte') // mode de réponse : texte ou image
+  const [prompt, setPrompt] = useState('')
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [model, setModel] = useState('')
+  const [assistants, setAssistants] = useState([])
+  const [currentAssistantId, setCurrentAssistantId] = useState('new')
+  const [assistantName, setAssistantName] = useState('')
+  const [assistantDocuments, setAssistantDocuments] = useState([])
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isReady, setIsReady] = useState(false)
+  const [messagesHistory, setMessagesHistory] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [outputType, setOutputType] = useState('texte')
+  const [agentConfigs, setAgentConfigs] = useState({})
 
-  // Fonction utilitaire pour échapper les caractères spéciaux dans une RegExp
-  function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  // Initialisation : chargement des assistants enregistrés
   useEffect(() => {
     const savedAssistants = JSON.parse(localStorage.getItem('assistants')) || []
     if (savedAssistants.length > 0) {
@@ -52,7 +44,6 @@ function App() {
     setIsReady(true)
   }, [])
 
-  // Sauvegarde automatique dans localStorage avec debounce (300ms)
   useEffect(() => {
     if (isReady) {
       const timeout = setTimeout(() => {
@@ -62,17 +53,20 @@ function App() {
     }
   }, [assistants, isReady])
 
+  useEffect(() => {
+    Prism.highlightAll();
+  }, [messagesHistory]);
 
+  useEffect(() => {
+    loadAgentConfigs().then(setAgentConfigs).catch(console.error)
+  }, [])
 
-  // Ouvre ou ferme le panneau de configuration
   const toggleSettings = () => {
     setIsSettingsOpen(!isSettingsOpen)
   }
 
-  // Génère un ID unique (timestamp)
   const generateId = () => Date.now().toString()
 
-  // Sauvegarde ou mise à jour d’un assistant
   const handleSaveAssistant = () => {
     if (!assistantName.trim()) {
       alert('Le nom de l’assistant est obligatoire.')
@@ -85,13 +79,10 @@ function App() {
       model: model || '',
       systemPrompt: systemPrompt.trim() || '',
       history: messagesHistory,
-      documents: assistantDocuments.map(doc =>
-        typeof doc === 'object' && doc !== null ? doc.id : doc
-      )
+      documents: assistantDocuments.map(doc => typeof doc === 'object' && doc !== null ? doc.id : doc)
     }
 
     const existingIndex = assistants.findIndex(a => a.id === updatedAssistant.id)
-
     if (existingIndex !== -1) {
       const newAssistants = [...assistants]
       newAssistants[existingIndex] = updatedAssistant
@@ -108,7 +99,6 @@ function App() {
     setMessagesHistory([{ role: 'system', content: updatedAssistant.systemPrompt }])
   }
 
-  // Sélectionne un assistant existant ou réinitialise pour un nouveau
   const handleSelectAssistant = async (id) => {
     if (id === 'new') {
       setAssistantName('')
@@ -125,14 +115,12 @@ function App() {
         setSystemPrompt(selected.systemPrompt)
         setCurrentAssistantId(selected.id)
         setMessagesHistory(selected.history || [{ role: 'system', content: selected.systemPrompt }])
-
         const docs = await getDocumentsByIds(selected.documents || [])
         setAssistantDocuments(docs.map(doc => ({ ...doc })))
       }
     }
   }
 
-  // Gère l'upload de fichiers textes locaux
   const handleUploadDocuments = async (files) => {
     const ids = await Promise.all(
       files.map(async (file) => {
@@ -146,103 +134,80 @@ function App() {
     return ids
   }
 
-  // Découpe les blocs ```code``` dans une réponse texte
-    const parseResponse = (content) => {
-    const regex = /```(\w+)?\n([\s\S]*?)```/g
-    let parts = []
-    let lastIndex = 0
-    let match
-
-    while ((match = regex.exec(content)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({ type: 'text', content: content.substring(lastIndex, match.index) })
-      }
-      const language = match[1] || 'plaintext'
-      const code = match[2]
-      parts.push({ type: 'code', content: code, language })
-      lastIndex = regex.lastIndex
-    }
-
-    if (lastIndex < content.length) {
-      parts.push({ type: 'text', content: content.substring(lastIndex) })
-    }
-
-    return parts
-  }
-
-
-  // Réinitialise le chat (nouvelle session)
   const handleNewChat = () => {
     setMessagesHistory(systemPrompt ? [{ role: 'system', content: systemPrompt }] : [])
   }
 
-  // Envoie une requête à l'IA (texte ou image)
   const handleSend = async () => {
     if (!prompt.trim() || loading) return;
     setLoading(true);
 
     try {
-      if (outputType === 'image') {
-        const imageDataUrl = await generateImage(prompt);
-        const newMessages = [{ role: 'user', content: prompt }];
-
-        newMessages.push({
-          role: 'assistant',
-          content: imageDataUrl
-            ? `![image générée](${imageDataUrl})`
-            : `⚠️ Erreur lors de la génération d'image. Veuillez réessayer.`
-        });
-
-        setMessagesHistory(prev => [...prev.slice(-28), ...newMessages]);
-      } else {
-        let contextText = '';
-        if (assistantDocuments?.length) {
-          const docs = await getDocumentsByIds(assistantDocuments);
-          const texts = docs.map(doc => doc.text || '');
-          contextText = texts.filter(Boolean).join('\n\n');
-        }
-
-        const enrichedPrompt = contextText ? `${contextText}\n\n${prompt}` : prompt;
-
-        const response = await fetch('http://localhost:11434/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            messages: [
-              ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-              { role: 'user', content: enrichedPrompt },
-            ],
-            stream: false
-          }),
-        });
-
-        if (!response.ok) throw new Error('Erreur de communication avec Ollama');
-        const json = await response.json();
-        console.log('↩️ Réponse fetch', response);
-        console.log('[🧠 Réponse brute du modèle]', json);
-        let assistantReply = json.message?.content || '';
-
-        // Si la réponse contient un tag image, on déclenche une génération automatique
-        const imagePromptMatch = assistantReply.match(/--image[:\s-]*([^\n]+)/i);
-        if (imagePromptMatch) {
-          const promptForImage = imagePromptMatch[1].trim();
-          const imageDataUrl = await generateImage(promptForImage);
-
-          const replacement = imageDataUrl
-            ? `![image générée](${imageDataUrl})`
-            : `❌ Erreur : l'image demandée (« ${promptForImage} ») n'a pas pu être générée.`;
-
-          const pattern = new RegExp(`--image[:\\s-]*${escapeRegExp(promptForImage)}`, 'i');
-          assistantReply = assistantReply.replace(pattern, replacement);
-        }
-
-        setMessagesHistory(prev => [
-          ...prev.slice(-28),
-          { role: 'user', content: prompt },
-          { role: 'assistant', content: assistantReply }
-        ]);
+      let contextText = '';
+      if (assistantDocuments?.length) {
+        const docs = await getDocumentsByIds(assistantDocuments);
+        const texts = docs.map(doc => doc.text || '');
+        contextText = texts.filter(Boolean).join('\n\n');
       }
+
+      const enrichedPrompt = contextText ? `${contextText}\n\n${prompt}` : prompt;
+
+      
+      
+      const systemPromptFinal = `${systemPrompt.trim()}\n${buildAgentInstructionPrompt(agentConfigs)}`;
+
+      const response = await fetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            
+            ...(systemPromptFinal ? [{ role: 'system', content: systemPromptFinal }] : []),
+            { role: 'user', content: enrichedPrompt },
+          ],
+          stream: false
+        }),
+      });
+
+      if (!response.ok) throw new Error('Erreur de communication avec Ollama');
+      const json = await response.json();
+
+      const assistantReplyRaw = json.message?.content || '';
+
+      const agentCommands = extractAgentCommands(assistantReplyRaw)
+      let assistantReply = assistantReplyRaw
+
+      
+
+      for (const { agentId, prompt: agentPrompt, raw } of agentCommands) {
+        const config = agentConfigs[agentId];
+        if (!config) continue;
+
+        const result = await executeAgent(agentId, agentPrompt, config);
+
+        const escapedRaw = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(escapedRaw, 'g');
+
+        // On injecte le résultat de façon plus propre, sur une ligne dédiée
+        const safeReplacement = `\n\n[Agent ${agentId}]\n${result}\n\n`;
+
+        assistantReply = assistantReply.replace(re, safeReplacement);
+
+        // Log de debug (facultatif)
+        console.log(`[Agent utilisé] ${agentId} →`, result);
+      }
+
+
+      console.log('[handleSend] assistantReplyRaw:', assistantReplyRaw);
+      console.log('[handleSend] agentCommands:', agentCommands);
+      console.log('[assistantReply final]', assistantReply);
+
+      setMessagesHistory(prev => [
+        ...prev.slice(-28),
+        { role: 'user', content: prompt },
+        { role: 'assistant', content: assistantReply }
+      ])
 
       setPrompt('');
       setLoading(false);
@@ -258,7 +223,6 @@ function App() {
     }
   }
 
-  // Gère Ctrl+Entrée pour envoyer le prompt
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !loading) {
       e.preventDefault()
@@ -266,119 +230,138 @@ function App() {
     }
   }
 
-
-  //Interface utilisateur
-   return (
+  return (
     <div className="container">
       <div className="header">
         <h1>🤖 {assistantName || 'Assistant'}</h1>
-        <button onClick={handleNewChat} className="save-button">🧹 Nouveau chat</button>
+        <button onClick={handleNewChat} className="newchat-button button button--round"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg></button>
       </div>
-      <div className="flex">
+
+      
         <div className="chat-history">
-          {messagesHistory.map((msg, index) => {
+          {messagesHistory
+            .filter(msg => msg.role !== 'system') // 👈 filtre les prompts système
+            .map((msg, index) => {
+
+            
+
+
             const match = msg.content.match(/\!\[image générée\]\((data:image\/png;base64,[^)]+)\)/);
             const imageSrc = match?.[1];
+            // Supprimer aussi les balises <think>…</think> si présent
             const contentSansImage = msg.content.replace(/\!\[image générée\]\((data:image\/png;base64,[^)]+)\)/, '');
 
-            return (
-              <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
-                <div className="chat-meta">
-                  <strong>{msg.role === 'user' ? '👤 Toi' : '🤖 Assistant'}</strong> :
+              return (
+                <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+                  <div className="chat-meta">
+                    <strong>{msg.role === 'user' ? '👤 Toi' : '🤖 Assistant'}</strong> :
+                  </div>
+
+                  <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypePrism]}
+              components={{
+                img: ({ node, ...props }) => {
+                  if (!props.src) return null;
+                  return (
+                    <img
+                      src={props.src}
+                      alt={props.alt || 'image'}
+                      style={{ maxWidth: '100%', borderRadius: '10px', marginTop: '10px' }}
+                    />
+                  );
+                },
+              }}
+            >
+              {contentSansImage}
+            </ReactMarkdown>
+
+                  {imageSrc && (
+                    <img
+                      src={imageSrc}
+                      alt="image générée"
+                      style={{ maxWidth: '100%', borderRadius: '10px', marginTop: '10px' }}
+                    />
+                  )}
                 </div>
-
-                <ReactMarkdown
-                  rehypePlugins={[rehypePrism]}
-                  components={{
-                    img: ({ node, ...props }) => {
-                      if (!props.src) return null;
-                      return (
-                        <img
-                          src={props.src}
-                          alt={props.alt || 'image'}
-                          style={{ maxWidth: '100%', borderRadius: '10px', marginTop: '10px' }}
-                        />
-                      );
-                    },
-                  }}
-                >
-                  {contentSansImage}
-                </ReactMarkdown>
-
-
-                {imageSrc && (
-                  <img
-                    src={imageSrc}
-                    alt="image générée"
-                    style={{ maxWidth: '100%', borderRadius: '10px', marginTop: '10px' }}
-                  />
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
-
-            <SettingsPanel
-              isOpen={isSettingsOpen}
-              assistantName={assistantName}
-              setAssistantName={setAssistantName}
-              systemPrompt={systemPrompt}
-              setSystemPrompt={setSystemPrompt}
-              model={model}
-              setModel={setModel}
-              onSaveAssistant={handleSaveAssistant}
-              assistants={assistants}
-              currentAssistantId={currentAssistantId}
-              onSelectAssistant={handleSelectAssistant}
-              onDeleteAssistant={() => {
-                const updated = assistants.filter(a => a.id !== currentAssistantId)
-                setAssistants(updated)
-                setCurrentAssistantId('new')
-                setAssistantName('')
-                setModel('')
-                setSystemPrompt('')
-                setAssistantDocuments([])
-                setMessagesHistory([])
-              }}
-              assistantDocuments={assistantDocuments}
-              setAssistantDocuments={setAssistantDocuments}
-              onUploadDocuments={handleUploadDocuments}
-            />
-      </div>
+        <SettingsPanel
+          isOpen={isSettingsOpen}
+          assistantName={assistantName}
+          setAssistantName={setAssistantName}
+          systemPrompt={systemPrompt}
+          setSystemPrompt={setSystemPrompt}
+          model={model}
+          setModel={setModel}
+          onSaveAssistant={handleSaveAssistant}
+          assistants={assistants}
+          currentAssistantId={currentAssistantId}
+          onSelectAssistant={handleSelectAssistant}
+          onDeleteAssistant={() => {
+            const updated = assistants.filter(a => a.id !== currentAssistantId)
+            setAssistants(updated)
+            setCurrentAssistantId('new')
+            setAssistantName('')
+            setModel('')
+            setSystemPrompt('')
+            setAssistantDocuments([])
+            setMessagesHistory([])
+          }}
+          assistantDocuments={assistantDocuments}
+          setAssistantDocuments={setAssistantDocuments}
+          onUploadDocuments={handleUploadDocuments}
+        />
+  
 
       <div className="chat-block-input">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Ton message ici..."
-          className="chat-input"
-        />
-        <div style={{ margin: '10px 0' }}>
-          <label>
-            <input
-              type="radio"
-              value="texte"
-              checked={outputType === 'texte'}
-              onChange={() => setOutputType('texte')}
-            />
-            Réponse texte
-          </label>
-          <label style={{ marginLeft: '20px' }}>
-            <input
-              type="radio"
-              value="image"
-              checked={outputType === 'image'}
-              onChange={() => setOutputType('image')}
-            />
-            Image générée
-          </label>
-        </div>
+        <div className="chat-block-input-inner">
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Ton message ici..."
+            className="chat-input"
+          />
+          <div className="flex flex-sc">
+            <div style={{ margin: '10px 0' }}>
+              <label>
+                <input
+                  type="radio"
+                  value="texte"
+                  checked={outputType === 'texte'}
+                  onChange={() => setOutputType('texte')}
+                />
+                Réponse texte
+              </label>
+              <label style={{ marginLeft: '20px' }}>
+                <input
+                  type="radio"
+                  value="image"
+                  checked={outputType === 'image'}
+                  onChange={() => setOutputType('image')}
+                />
+                Image générée
+              </label>
+            </div>
 
-        <button className="send-button" onClick={handleSend} disabled={loading}>
-          {loading ? 'Envoi...' : 'Envoyer'}
-        </button>
+            <button className="send-button" onClick={handleSend} disabled={loading}>
+  {loading ? (
+    <>
+      <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M520-200v-560h240v560H520Zm-320 0v-560h240v560H200Zm400-80h80v-400h-80v400Zm-320 0h80v-400h-80v400Zm0-400v400-400Zm320 0v400-400Z"/></svg>
+
+    </>
+  ) : (
+    <>
+      <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>
+
+    </>
+  )}
+</button>
+          </div>
+        </div>
       </div>
     </div>
   )
