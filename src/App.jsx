@@ -246,15 +246,57 @@ const handleUploadDocuments = async (files) => {
 
 
       const agentStart = performance.now();
-      const agentCommands = extractAgentCommands(assistantReplyRaw);
+      // Supprime tout ce qui est entre balises <think>...</think> et images Markdown
+      let agentContentCleaned = assistantReplyRaw
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/\!\[image générée\]\((data:image\/png;base64,[^)]+)\)/gi, '');
+
+      // 🔍 Détection implicite d’agents
+      if (!agentContentCleaned.includes('--calc') && /[\d\s+\-*/().]{3,}/.test(agentContentCleaned)) {
+        const equationMatch = agentContentCleaned.match(/[\d+\-*/().\s]{3,}/);
+        if (equationMatch) {
+          const eq = equationMatch[0].trim();
+          agentContentCleaned += `\n\n--calc ${eq}`;
+        }
+      }
+
+      if (!agentContentCleaned.includes('--image') && /(?:dessine|montre|imagine|visualise|représente).{0,40}(un|une|des)\b/i.test(agentContentCleaned)) {
+        const imgDesc = agentContentCleaned.match(/(?:dessine|montre|imagine|visualise|représente).{0,80}/i);
+        if (imgDesc) {
+          const desc = imgDesc[0].replace(/^(?:dessine|montre|imagine|visualise|représente)\s*/i, '');
+          agentContentCleaned += `\n\n--image ${desc.trim()}`;
+        }
+      }
+
+      const agentCommands = extractAgentCommands(agentContentCleaned);
+
+
       let assistantReply = assistantReplyRaw;
+
+      const executedAgents = new Set(); // ✅ initialise un set pour éviter les doublons
 
       for (const { agentId, prompt: agentPrompt, raw } of agentCommands) {
         const config = agentConfigs[agentId];
         if (!config) continue;
 
+        let cleanedPrompt = agentPrompt;
+        // ⛔ Ignore les agents mal formés
+        if (
+          (agentId === 'calc' && (!cleanedPrompt || !/[\d\-+*/]/.test(cleanedPrompt))) ||
+          (agentId === 'image' && !/^[a-zA-Z0-9À-ÿ]/.test(agentPrompt.trim()))
+        ) {
+          console.warn(`[Agent ignoré] ${agentId} avec prompt incomplet :`, cleanedPrompt);
+          continue;
+        }
+
+        // 🔢 Nettoyage spécifique pour l'agent calc
+        if (agentId === 'calc') {
+          const match = agentPrompt.match(/[\d\s+\-*/().=xX]+/);
+          if (match) cleanedPrompt = match[0].replace(/x/gi, '*').replace(/=/g, '').trim();
+          else cleanedPrompt = agentPrompt.trim();
+        }
         const tAgent = performance.now();
-        const result = await executeAgent(agentId, agentPrompt, config);
+        const result = await executeAgent(agentId, cleanedPrompt, config);
         const tAgentEnd = performance.now();
 
         console.log(`[Agent utilisé] ${agentId} →`, result);
@@ -262,7 +304,24 @@ const handleUploadDocuments = async (files) => {
 
         const escapedRaw = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const re = new RegExp(escapedRaw, 'g');
-        const safeReplacement = `\n\n[Agent ${agentId}]\n${result}\n\n`;
+        
+        let formatted = result;
+
+        if (agentId === 'calc') {
+          formatted = `🧮 ${cleanedPrompt} = **${result.match(/: (.*)/)?.[1] || '?'}**`;
+        }
+
+        if (agentId === 'image') {
+          if (!result || !result.includes('![image générée](')) {
+            formatted = `❌ Aucune image générée`;
+          } else {
+            const badge = '🎨 **Image générée automatiquement**';
+            formatted = `${badge} ${result}`;
+          }
+        }
+
+        const safeReplacement = `\n\n${formatted}\n\n`;
+
         assistantReply = assistantReply.replace(re, safeReplacement);
       }
 
@@ -353,10 +412,11 @@ const handleUploadDocuments = async (files) => {
             
 
 
-            const match = msg.content.match(/\!\[image générée\]\((data:image\/png;base64,[^)]+)\)/);
+            const match = msg.content.match(/\!\[image générée\]\((\/uploads\/[^)]+)\)/);
             const imageSrc = match?.[1];
             // Supprimer aussi les balises <think>…</think> si présent
-            const contentSansImage = msg.content.replace(/\!\[image générée\]\((data:image\/png;base64,[^)]+)\)/, '');
+            const contentSansImage = msg.content.replace(/\!\[image générée\]\((data:image\/png;base64,[^)]+)\)/gi, '');
+
             const contentCleaned = contentSansImage.replace(/<think>[\s\S]*?<\/think>/gi, '');
 
               return (
@@ -399,13 +459,7 @@ const handleUploadDocuments = async (files) => {
 
             </ReactMarkdown>
 
-                  {imageSrc && (
-                    <img
-                      src={imageSrc}
-                      alt="image générée"
-                      style={{ maxWidth: '100%', borderRadius: '10px', marginTop: '10px' }}
-                    />
-                  )}
+                 
                 </div>
               );
             })}

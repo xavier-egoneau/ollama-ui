@@ -31,7 +31,18 @@ export async function execute({ prompt }) {
     if (!response.ok) return '';
 
     const data = await response.json();
-    return data.images?.[0] || '';
+    
+    const base64 = data.images?.[0];
+    if (!base64) return '';
+
+    const uploadResponse = await fetch('http://localhost:3001/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64: `data:image/png;base64,${base64}` }),
+    });
+    const uploadResult = await uploadResponse.json();
+    return `![image générée](${uploadResult.url})`;
+
   } catch (err) {
     console.error('[agent:image] Erreur :', err);
     return '';
