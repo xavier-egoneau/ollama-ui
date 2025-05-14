@@ -48,13 +48,13 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (isReady) {
-      const timeout = setTimeout(() => {
-        localStorage.setItem('assistants', JSON.stringify(assistants))
-      }, 300)
-      return () => clearTimeout(timeout)
-    }
-  }, [assistants, isReady])
+  if (isReady) {
+    const timeout = setTimeout(() => {
+      localStorage.setItem('assistants', JSON.stringify(assistants));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }
+}, [assistants, isReady]);
 
   useEffect(() => {
     Prism.highlightAll();
@@ -64,9 +64,7 @@ function App() {
     loadAgentConfigs().then(setAgentConfigs).catch(console.error)
   }, [])
 
-  const toggleSettings = () => {
-    setIsSettingsOpen(!isSettingsOpen)
-  }
+
 
   const generateId = () => Date.now().toString()
 
@@ -281,8 +279,25 @@ const handleUploadDocuments = async (files) => {
         { role: 'assistant', content: assistantReply }
       ]);
 
+      setAssistants(prev =>
+        prev.map(a =>
+          a.id === currentAssistantId
+            ? {
+                ...a,
+                history: [
+                  ...messagesHistory.slice(-28),
+                  { role: 'user', content: prompt },
+                  { role: 'assistant', content: assistantReply }
+                ]
+              }
+            : a
+        )
+      );
+
       const tEnd = performance.now();
       console.log(`✅ handleSend TOTAL : ${Math.round(tEnd - t0)} ms`);
+
+      
 
       setPrompt('');
       setLoading(false);
@@ -293,6 +308,7 @@ const handleUploadDocuments = async (files) => {
         { role: 'user', content: prompt },
         { role: 'assistant', content: '❌ Une erreur est survenue. Veuillez réessayer.' }
       ]);
+
       setAssistants(prev =>
         prev.map(a =>
           a.id === currentAssistantId
@@ -301,7 +317,7 @@ const handleUploadDocuments = async (files) => {
                 history: [
                   ...(a.history || []).slice(-28),
                   { role: 'user', content: prompt },
-                  { role: 'assistant', content: assistantReply }
+                  { role: 'assistant', content: '❌ Une erreur est survenue. Veuillez réessayer.' }
                 ]
               }
             : a
