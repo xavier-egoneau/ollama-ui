@@ -10,7 +10,8 @@ import remarkGfm from 'remark-gfm';
 import { extractTextFromDocument, readTextFromFile } from './documentUtils.js'
 import { saveDocument, getDocumentsByIds } from './db.js'
 import { loadAgentConfigs, extractAgentCommands, executeAgent, buildAgentInstructionPrompt } from './router.js'
-import { sendPromptToOllama,summarizeDocument } from './api.js'; 
+
+import { sendPromptToOllama, summarizeDocument, optimizeDocumentContent } from './api.js';
 import { extractTextFromPDF } from './pdfUtils.js';
 
 
@@ -147,11 +148,14 @@ const handleUploadDocuments = async (files) => {
       }
 
       try {
-        const summary = await summarizeDocument(text, model);
+        let optimized = await optimizeDocumentContent(text, model);
+        optimized = optimized.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         const doc = {
           name: file.name,
-          text,
-          summary
+          content: optimized,
+          type: file.name.split('.').pop().toLowerCase(),
+          originalSize: file.size,
+          createdAt: Date.now()
         };
         const id = await saveDocument(doc);
         return { ...doc, id };
@@ -225,7 +229,7 @@ const handleUploadDocuments = async (files) => {
 
         const texts = docs
           .filter(Boolean)
-          .map(doc => doc.summary || doc.text || '');
+          .map(doc => doc.content || doc.summary || doc.text || '');
         contextText = texts.filter(Boolean).join('\n\n');
       }
 
@@ -490,6 +494,7 @@ const handleUploadDocuments = async (files) => {
           assistantDocuments={assistantDocuments}
           setAssistantDocuments={setAssistantDocuments}
           onUploadDocuments={handleUploadDocuments}
+          setAssistants={setAssistants}
         />
   
 

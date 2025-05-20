@@ -86,6 +86,25 @@ Tu es un assistant chargé de résumer un document. Fournis un résumé concis, 
   }
 }
 
+export async function optimizeDocumentContent(text, model = 'mistral') {
+  const systemPrompt = `
+Tu es un assistant chargé d'optimiser un document brut pour qu'il soit lisible, clair, bien structuré, et utilisable dans un assistant IA.
+- Garde tous les faits et informations importantes
+- Supprime uniquement les répétitions, formulations maladroites, longueurs inutiles
+- Garde la logique du texte intacte
+- Si possible, structure le contenu avec des titres ou paragraphes lisibles
+- N'invente rien, ne résume pas, reformule proprement si nécessaire
+`.trim();
+
+  try {
+    const result = await sendPromptToOllama(text, systemPrompt, model);
+    return result.trim();
+  } catch (err) {
+    console.error('[optimizeDocumentContent] ❌ Erreur :', err);
+    return text;
+  }
+}
+
 
 export async function generateImage(prompt) {
   try {

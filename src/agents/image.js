@@ -3,6 +3,7 @@ import { sendPromptToOllama } from '../api.js';
 async function translateToEnglish(text) {
   const systemPrompt = "Translate the following prompt into fluent, descriptive English for image generation. Do not explain, just return the translated prompt.";
   const translated = await sendPromptToOllama(text, systemPrompt, 'gemma3:4b');
+  console.log(translated);
   return translated.trim();
 }
 
@@ -16,15 +17,15 @@ export async function execute({ prompt }) {
       body: JSON.stringify({
         prompt: translatedPrompt,
         negative_prompt: "blurry, distorted, low quality, bad anatomy, watermark, text, logo",
-        steps: 30,
-        cfg_scale: 7,
-        sampler_index: "DPM++ 2M Karras",
+        steps: 20,
+        cfg_scale: 3.5,
+        sampler_index: "DPM2 Karras",
         width: 512,//768
         height: 512,//768
         seed: -1,
-        restore_faces: false,
+        restore_faces: true,
         tiling: false,
-        enable_hr: false,
+        enable_hr: false
       }),
     });
 

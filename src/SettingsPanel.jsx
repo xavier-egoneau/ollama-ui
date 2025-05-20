@@ -17,6 +17,7 @@ function SettingsPanel({
   assistantDocuments,
   setAssistantDocuments,
   onUploadDocuments,
+  setAssistants
 }) {
   const [models, setModels] = useState([])
 
@@ -42,15 +43,47 @@ function SettingsPanel({
       console.error('⛔ setAssistantDocuments manquant dans SettingsPanel');
       return;
     }
-    setAssistantDocuments(prev =>
-      prev.filter((doc) => {
+
+    setAssistantDocuments(prev => {
+      const updatedDocs = prev.filter((doc) => {
         const id = typeof doc === 'object' && doc !== null ? doc.id : doc;
         return id !== docId;
-      })
-    );
+      });
 
-    onSaveAssistant(); // 🔄 Mise à jour immédiate de l'assistant en mémoire + localStorage
+      // 🔁 Met à jour immédiatement la version stockée
+      if (typeof setAssistants === 'function' && typeof currentAssistantId === 'string') {
+        setAssistants(prev =>
+          prev.map(a =>
+            a.id === currentAssistantId
+              ? {
+                  ...a,
+                  documents: updatedDocs.map(doc => (typeof doc === 'object' ? doc.id : doc))
+                }
+              : a
+          )
+        );
+
+        // 💾 Sauvegarde dans localStorage (à la main, car `onSaveAssistant` utilise assistantDocuments qui n’est pas encore à jour)
+        setTimeout(() => {
+          const newAssistants = JSON.parse(localStorage.getItem('assistants') || '[]');
+          const updated = newAssistants.map(a =>
+            a.id === currentAssistantId
+              ? {
+                  ...a,
+                  documents: updatedDocs.map(doc => (typeof doc === 'object' ? doc.id : doc))
+                }
+              : a
+          );
+          localStorage.setItem('assistants', JSON.stringify(updated));
+        }, 150);
+      }
+
+      return updatedDocs;
+    });
   }
+
+
+
 
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files)
