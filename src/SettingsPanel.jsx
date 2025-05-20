@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-
+import { deleteDocument } from './db.js';
 
 function SettingsPanel({
   isOpen,
@@ -17,7 +17,8 @@ function SettingsPanel({
   assistantDocuments,
   setAssistantDocuments,
   onUploadDocuments,
-  setAssistants
+  setAssistants,
+  agentConfigs 
 }) {
   const [models, setModels] = useState([])
 
@@ -38,48 +39,26 @@ function SettingsPanel({
     fetchModels()
   }, [])
 
-  function handleRemoveDocument(docId) {
-    if (typeof setAssistantDocuments !== 'function') {
-      console.error('⛔ setAssistantDocuments manquant dans SettingsPanel');
-      return;
-    }
+  async function handleRemoveDocument(docId) {
+    if (typeof setAssistantDocuments !== 'function') return;
 
-    setAssistantDocuments(prev => {
-      const updatedDocs = prev.filter((doc) => {
-        const id = typeof doc === 'object' && doc !== null ? doc.id : doc;
-        return id !== docId;
-      });
+    await deleteDocument(docId); // 🔥 suppression réelle
 
-      // 🔁 Met à jour immédiatement la version stockée
-      if (typeof setAssistants === 'function' && typeof currentAssistantId === 'string') {
-        setAssistants(prev =>
-          prev.map(a =>
-            a.id === currentAssistantId
-              ? {
-                  ...a,
-                  documents: updatedDocs.map(doc => (typeof doc === 'object' ? doc.id : doc))
-                }
-              : a
-          )
-        );
+    setAssistantDocuments(prev => prev.filter(doc => {
+      const id = typeof doc === 'object' ? doc.id : doc;
+      return id !== docId;
+    }));
 
-        // 💾 Sauvegarde dans localStorage (à la main, car `onSaveAssistant` utilise assistantDocuments qui n’est pas encore à jour)
-        setTimeout(() => {
-          const newAssistants = JSON.parse(localStorage.getItem('assistants') || '[]');
-          const updated = newAssistants.map(a =>
-            a.id === currentAssistantId
-              ? {
-                  ...a,
-                  documents: updatedDocs.map(doc => (typeof doc === 'object' ? doc.id : doc))
-                }
-              : a
-          );
-          localStorage.setItem('assistants', JSON.stringify(updated));
-        }, 150);
-      }
-
-      return updatedDocs;
-    });
+    setAssistants(prev =>
+      prev.map(a =>
+        a.id === currentAssistantId
+          ? {
+              ...a,
+              documents: (a.documents || []).filter(id => id !== docId)
+            }
+          : a
+      )
+    );
   }
 
 
@@ -111,6 +90,7 @@ function SettingsPanel({
             <option value="new">➕ Ajouter un nouvel assistant</option>
           </select>
         </div>
+
 
         <div className="form-control">
           <label>Nom de l'assistant :</label>
@@ -149,6 +129,50 @@ function SettingsPanel({
             maxLength={5000}
           />
         </div>
+
+        {assistants && agentConfigs && currentAssistantId !== 'new' && (
+          <div className="form-control">
+            <label>Agents activés :</label>
+            <ul className="ul-agents" >
+              {Object.keys(agentConfigs).map((agentId) => {
+                const currentAssistant = assistants.find(a => a.id === currentAssistantId);
+                const isEnabled = currentAssistant?.agents?.[agentId]?.enabled ?? (agentConfigs[agentId].enabledByDefault !== false);
+
+                const toggleAgent = (enabled) => {
+                  const updatedAssistants = assistants.map(a => {
+                    if (a.id !== currentAssistantId) return a;
+                    return {
+                      ...a,
+                      agents: {
+                        ...a.agents,
+                        [agentId]: {
+                          ...a.agents?.[agentId],
+                          enabled
+                        }
+                      }
+                    };
+                  });
+                  setAssistants(updatedAssistants);
+                };
+
+                return (
+                  <li key={agentId}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="checkbox"
+                        checked={isEnabled}
+                        onChange={(e) => toggleAgent(e.target.checked)}
+                      />
+                      <span>{agentId}</span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+
         
         {currentAssistantId && currentAssistantId !== 'new' && (
           <div className="form-control">

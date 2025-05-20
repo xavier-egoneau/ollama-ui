@@ -32,9 +32,11 @@ function App() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    const savedAssistants = JSON.parse(localStorage.getItem('assistants')) || []
+    const savedAssistants = JSON.parse(localStorage.getItem('assistants')) || [];
+    const lastId = localStorage.getItem('lastAssistantId');
+
     if (savedAssistants.length > 0) {
-      const first = savedAssistants[0]
+      const first = savedAssistants.find(a => a.id === lastId) || savedAssistants[0];
       setAssistants(savedAssistants)
       setAssistantName(first.name)
       setModel(first.model)
@@ -48,14 +50,30 @@ function App() {
     setIsReady(true)
   }, [])
 
+  // 1. Sauvegarde des assistants dans localStorage
   useEffect(() => {
-  if (isReady) {
+    if (isReady) {
+      const timeout = setTimeout(() => {
+        localStorage.setItem('assistants', JSON.stringify(assistants));
+      }, 300);
+      return () => clearTimeout(timeout);
+    }
+  }, [assistants, isReady]);
+
+  // 2. Chargement initial de la config des agents
+  useEffect(() => {
+    loadAgentConfigs().then(setAgentConfigs).catch(console.error)
+  }, []);
+
+  useEffect(() => {
+    if (!isReady || currentAssistantId === 'new') return;
+
     const timeout = setTimeout(() => {
-      localStorage.setItem('assistants', JSON.stringify(assistants));
-    }, 300);
+      handleSaveAssistant();
+    }, 300); // 🕒 petit délai pour éviter trop de sauvegardes
+
     return () => clearTimeout(timeout);
-  }
-}, [assistants, isReady]);
+  }, [assistantName, model, systemPrompt, assistants, currentAssistantId]);
 
   useEffect(() => {
     Prism.highlightAll();
@@ -69,59 +87,90 @@ function App() {
 
   const generateId = () => Date.now().toString()
 
-  const handleSaveAssistant = () => {
-    if (!assistantName.trim()) {
-      alert('Le nom de l’assistant est obligatoire.')
-      return
-    }
-
-    const updatedAssistant = {
-      id: currentAssistantId === 'new' ? generateId() : currentAssistantId,
-      name: assistantName.trim(),
-      model: model || '',
-      systemPrompt: systemPrompt.trim() || '',
-      history: messagesHistory,
-      documents: assistantDocuments.map(doc => typeof doc === 'object' && doc !== null ? doc.id : doc)
-    }
-
-    const existingIndex = assistants.findIndex(a => a.id === updatedAssistant.id)
-    if (existingIndex !== -1) {
-      const newAssistants = [...assistants]
-      newAssistants[existingIndex] = updatedAssistant
-      setAssistants(newAssistants)
-    } else {
-      const newAssistants = [...assistants, updatedAssistant]
-      setAssistants(newAssistants)
-    }
-
-    setCurrentAssistantId(updatedAssistant.id)
-    setAssistantName(updatedAssistant.name)
-    setModel(updatedAssistant.model)
-    setSystemPrompt(updatedAssistant.systemPrompt)
-    setMessagesHistory([{ role: 'system', content: updatedAssistant.systemPrompt }])
+const handleSaveAssistant = () => {
+  if (!assistantName.trim()) {
+    alert('Le nom de l’assistant est obligatoire.');
+    return;
   }
 
-  const handleSelectAssistant = async (id) => {
-    if (id === 'new') {
-      setAssistantName('')
-      setModel('')
-      setSystemPrompt('')
-      setAssistantDocuments([])
-      setCurrentAssistantId('new')
-      setMessagesHistory([])
-    } else {
-      const selected = assistants.find(a => a.id === id)
-      if (selected) {
-        setAssistantName(selected.name)
-        setModel(selected.model)
-        setSystemPrompt(selected.systemPrompt)
-        setCurrentAssistantId(selected.id)
-        setMessagesHistory(selected.history || [{ role: 'system', content: selected.systemPrompt }])
-        const docs = await getDocumentsByIds(selected.documents || [])
-        setAssistantDocuments(docs.map(doc => ({ ...doc })))
+  // Génération automatique de la config agents à partir de agentConfigs
+  // On récupère les agents existants (modifiés dans l’interface)
+const currentAssistant = assistants.find(a => a.id === currentAssistantId);
+const generatedAgents = currentAssistant?.agents || {};
+
+  const updatedAssistant = {
+    id: currentAssistantId === 'new' ? generateId() : currentAssistantId,
+    name: assistantName.trim(),
+    model: model || '',
+    systemPrompt: systemPrompt.trim() || '',
+    history: messagesHistory,
+    documents: assistantDocuments.map(doc => typeof doc === 'object' && doc !== null ? doc.id : doc),
+    agents: generatedAgents
+  };
+
+  const existingIndex = assistants.findIndex(a => a.id === updatedAssistant.id);
+  if (existingIndex !== -1) {
+    const newAssistants = [...assistants];
+    newAssistants[existingIndex] = updatedAssistant;
+    setAssistants(newAssistants);
+  } else {
+    const newAssistants = [...assistants, updatedAssistant];
+    setAssistants(newAssistants);
+  }
+
+  setCurrentAssistantId(updatedAssistant.id);
+  setAssistantName(updatedAssistant.name);
+  setModel(updatedAssistant.model);
+  setSystemPrompt(updatedAssistant.systemPrompt);
+  if (currentAssistantId === 'new') {
+    setMessagesHistory([{ role: 'system', content: updatedAssistant.systemPrompt }]);
+  }
+  localStorage.setItem('lastAssistantId', updatedAssistant.id);
+
+};
+
+
+const handleSelectAssistant = async (id) => {
+  if (id === 'new') {
+    setAssistantName('');
+    setModel('');
+    setSystemPrompt('');
+    setAssistantDocuments([]);
+    setCurrentAssistantId('new');
+    setMessagesHistory([]);
+  } else {
+    const selected = assistants.find(a => a.id === id);
+    if (selected) {
+      // 🧠 Génération dynamique des agents si absents (cas ancien assistant)
+      if (!selected.agents) {
+        const defaultAgents = {};
+        for (const [agentId, config] of Object.entries(agentConfigs)) {
+          defaultAgents[agentId] = {
+            enabled: config.enabledByDefault !== false,
+            prompt: config.defaultPrompt || config.description
+          };
+        }
+        selected.agents = defaultAgents;
       }
+
+      setAssistantName(selected.name);
+      setModel(selected.model);
+      setSystemPrompt(selected.systemPrompt);
+      setCurrentAssistantId(selected.id);
+      setMessagesHistory(selected.history || [{ role: 'system', content: selected.systemPrompt }]);
+
+      const uniqueDocs = Array.from(new Map(
+        docs.filter(Boolean).map(doc => [doc.id, doc])
+      )).map(([_, doc]) => doc);
+      setAssistantDocuments(uniqueDocs);
+
+
+      console.log('📎 setAssistantDocuments avec :', new Set([...assistantDocuments, ...validDocs.map(doc => doc.id)]));
+
     }
   }
+};
+
 
   
 
@@ -169,22 +218,26 @@ const handleUploadDocuments = async (files) => {
   const validDocs = docs.filter(Boolean);
 
   // 🧠 Mise à jour directe des documents associés en mémoire
-  setAssistantDocuments(prev => [...prev, ...validDocs]);
+  setAssistantDocuments(prev => {
+    const map = new Map();
+    [...prev, ...validDocs].forEach(doc => {
+      const id = typeof doc === 'object' ? doc.id : doc;
+      if (!map.has(id)) map.set(id, doc);
+    });
+    return Array.from(map.values());
+  });
 
   // ✅ Mise à jour de l’assistant courant en mémoire (pas besoin de "save")
-  setAssistants(prev => {
-    return prev.map(a =>
-      a.id === currentAssistantId
-        ? {
-            ...a,
-            documents: [
-              ...(a.documents || []),
-              ...validDocs.map(doc => doc.id)
-            ]
-          }
-        : a
-    );
-  });
+  setAssistants(prev =>
+  prev.map(a =>
+    a.id === currentAssistantId
+      ? {
+          ...a,
+          documents: Array.from(new Set([...(a.documents || []), ...validDocs.map(doc => doc.id)]))
+        }
+      : a
+  )
+);
 
   setUploading(false);
   return validDocs.map(doc => doc.id);
@@ -231,14 +284,24 @@ const handleUploadDocuments = async (files) => {
           .filter(Boolean)
           .map(doc => doc.content || doc.summary || doc.text || '');
         contextText = texts.filter(Boolean).join('\n\n');
+
+        console.log('📄 CONTEXTE FINAL (longueur)', contextText.length);
+        console.log('📄 CONTEXTE (début)', contextText.slice(0, 300));
       }
 
       const t2 = performance.now();
       console.log(`📄 Documents chargés et concaténés en ${Math.round(t2 - t1)} ms`);
 
-      const enrichedPrompt = contextText ? `${contextText}\n\n${prompt}` : prompt;
+     
 
-      const systemPromptFinal = `${systemPrompt.trim()}\n${buildAgentInstructionPrompt(agentConfigs)}`;
+      const enrichedPrompt = contextText ? `${contextText}\n\n${prompt}` : prompt;
+      
+
+
+      const currentAssistant = assistants.find(a => a.id === currentAssistantId);
+      const systemPromptFinal = `${systemPrompt.trim()}\n${buildAgentInstructionPrompt(agentConfigs, currentAssistant?.agents || {})}`;
+      console.log('🧠 Prompt système final envoyé au LLM :\n\n', systemPromptFinal);
+
       const t3 = performance.now();
       console.log(`🧠 Prompt final construit en ${Math.round(t3 - t2)} ms`);
 
@@ -470,32 +533,33 @@ const handleUploadDocuments = async (files) => {
         </div>
 
         <SettingsPanel
-          isOpen={isSettingsOpen}
-          assistantName={assistantName}
-          setAssistantName={setAssistantName}
-          systemPrompt={systemPrompt}
-          setSystemPrompt={setSystemPrompt}
-          model={model}
-          setModel={setModel}
-          onSaveAssistant={handleSaveAssistant}
-          assistants={assistants}
-          currentAssistantId={currentAssistantId}
-          onSelectAssistant={handleSelectAssistant}
-          onDeleteAssistant={() => {
-            const updated = assistants.filter(a => a.id !== currentAssistantId)
-            setAssistants(updated)
-            setCurrentAssistantId('new')
-            setAssistantName('')
-            setModel('')
-            setSystemPrompt('')
-            setAssistantDocuments([])
-            setMessagesHistory([])
-          }}
-          assistantDocuments={assistantDocuments}
-          setAssistantDocuments={setAssistantDocuments}
-          onUploadDocuments={handleUploadDocuments}
-          setAssistants={setAssistants}
-        />
+  isOpen={isSettingsOpen}
+  assistantName={assistantName}
+  setAssistantName={setAssistantName}
+  systemPrompt={systemPrompt}
+  setSystemPrompt={setSystemPrompt}
+  model={model}
+  setModel={setModel}
+  onSaveAssistant={handleSaveAssistant}
+  assistants={assistants}
+  currentAssistantId={currentAssistantId}
+  onSelectAssistant={handleSelectAssistant}
+  onDeleteAssistant={() => {
+    const updated = assistants.filter(a => a.id !== currentAssistantId)
+    setAssistants(updated)
+    setCurrentAssistantId('new')
+    setAssistantName('')
+    setModel('')
+    setSystemPrompt('')
+    setAssistantDocuments([])
+    setMessagesHistory([])
+  }}
+  assistantDocuments={assistantDocuments}
+  setAssistantDocuments={setAssistantDocuments}
+  onUploadDocuments={handleUploadDocuments}
+  setAssistants={setAssistants}
+  agentConfigs={agentConfigs}
+/>
   
 
       <div className="chat-block-input">

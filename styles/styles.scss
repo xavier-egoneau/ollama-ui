@@ -295,6 +295,18 @@ body {
       color: $text-color;
       box-sizing: border-box;
     }
+    input[type="checkbox"]{
+      width: 10px;
+      max-width: 10px;
+    }
+    .ul-agents{
+      list-style: none;
+      display: flex;
+      padding-left: 0;
+      li{
+        padding-right: 10px;
+      }
+    }
   }
 }
 .newchat-button{

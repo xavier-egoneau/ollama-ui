@@ -17,68 +17,30 @@ export function extractAgentCommands(text) {
   return matches;
 }
 
-export function buildAgentInstructionPrompt(agentConfigs) {
-  const lines = Object.entries(agentConfigs).map(
-    ([id, cfg]) => `- \`--${id}\` : ${cfg.description}`
-  );
+export function buildAgentInstructionPrompt(agentConfigs, assistantAgentOverrides = {}) {
+  const active = [];
+  const inactive = [];
 
-  return `
-Tu es un assistant intelligent avec des outils internes que tu peux activer si besoin.
+  for (const [id, cfg] of Object.entries(agentConfigs)) {
+    const override = assistantAgentOverrides[id];
+    const enabled = override?.enabled ?? (cfg.enabledByDefault !== false);
+    const label = `- \`--${id}\` : ${cfg.description}`;
 
-Voici les outils disponibles :
-${lines.join('\n')}
+    if (enabled) {
+      const full = cfg.systemInstructions ? `${label}\n\n${cfg.systemInstructions}` : label;
+      active.push(full);
+    } else {
+      inactive.push(label);
+    }
+  }
 
----
+  let result = `Tu es un assistant intelligent avec des outils internes. Voici les outils disponibles :\n\n${active.join('\n\n')}`;
 
-### 🧮 Pour \`--calc\` :
-Utilise-le uniquement si tu veux effectuer un calcul. Exemple :
-\`\`\`
---calc 7 * (3 + 1)
-\`\`\`
+  if (inactive.length > 0) {
+    result += `\n\n---\n\nLes outils suivants existent mais sont actuellement désactivés. Tu peux les proposer si l'utilisateur souhaite les activer :\n\n${inactive.join('\n')}`;
+  }
 
----
-
-### 🎨 Pour \`--image\` :
-
-Tu peux générer une image à partir d'une description visuelle précise.  
-Un bon prompt pour une image doit idéalement contenir :
-
-- ✅ Un sujet principal (ex : un chat, un paysage, une scène…)
-- ✅ Un style (ex : photoréaliste, Ghibli, peinture à l’huile, manga…)
-- ✅ Un décor ou une ambiance (ex : forêt enchantée, salon haussmannien…)
-- ✅ Une lumière (ex : dorée, tamisée, contre-jour, néon…)
-- ✅ Des détails visuels (ex : ultra détaillé, flou artistique, 8K…)
-
-🧠 Tu peux réfléchir à ces éléments pour enrichir ton idée, mais au final tu dois **écrire une seule ligne propre** comme ceci :
-
-\`\`\`
---image [description complète et détaillée]
-\`\`\`
-
----
-
-#### ✅ Exemples corrects :
-
-✔️
-\`\`\`
---image un panda en armure dans une forêt de bambous, style Ghibli, lumière dorée, ultra détaillé
-\`\`\`
-
-✔️
-\`\`\`
---image une ville futuriste vue du ciel, style synthwave, lumière rose et bleue, gratte-ciels lumineux
-\`\`\`
-
-✔️
-\`\`\`
---image un chat blanc sur un coussin rouge dans un salon haussmannien, style réaliste, lumière du matin
-\`\`\`
-
----
-
-❌ Ne copie jamais "Sujet :", "Style :", etc. dans ta réponse.  
-✅ Commence directement par \`--image\` suivi de ton prompt complet.
-`.trim();
+  return result.trim();
 }
 
 
