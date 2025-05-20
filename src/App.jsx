@@ -340,7 +340,6 @@ const handleUploadDocuments = async (files) => {
 
       let assistantReply = assistantReplyRaw;
 
-      const executedAgents = new Set(); // ✅ initialise un set pour éviter les doublons
 
       for (const { agentId, prompt: agentPrompt, raw } of agentCommands) {
         const config = agentConfigs[agentId];
