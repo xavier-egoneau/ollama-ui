@@ -179,13 +179,15 @@ function SettingsPanel({
             <label>Documents associés :</label>
             <input type="file" multiple onChange={handleFileUpload} />
             <div className="document-list">
-              {assistantDocuments.map((doc, idx) => {
+              {Array.from(new Map(
+                  assistantDocuments.filter(Boolean).map(doc => [doc.id, doc])
+                )).map(([_, doc], idx) => {
                 if (!doc || typeof doc !== 'object') return null; // ⚠️ sécurisation
 
                 const label = doc.name || `Document ${doc.id || idx}`;
-                const preview = doc.summary
-                  ? doc.summary.slice(0, 200) + (doc.summary.length > 200 ? '…' : '')
-                  : 'Pas de résumé disponible.';
+                const preview = doc.content
+                ? doc.content.slice(0, 100) + (doc.content.length > 100 ? '…' : '')
+                : 'Contenu non disponible.';
 
                 return (
                   <div key={idx} className="doc-preview">

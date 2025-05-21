@@ -159,13 +159,18 @@ const handleSelectAssistant = async (id) => {
       setCurrentAssistantId(selected.id);
       setMessagesHistory(selected.history || [{ role: 'system', content: selected.systemPrompt }]);
 
-      const uniqueDocs = Array.from(new Map(
-        docs.filter(Boolean).map(doc => [doc.id, doc])
-      )).map(([_, doc]) => doc);
+      const docs = await getDocumentsByIds(selected.documents || []);
+      const seen = new Set();
+      const uniqueDocs = docs.filter(doc => {
+        if (!doc || seen.has(doc.id)) return false;
+        seen.add(doc.id);
+        return true;
+      });
       setAssistantDocuments(uniqueDocs);
+      console.log('📎 [SAFE] uniqueDocs →', uniqueDocs.map(d => d.id));
 
 
-      console.log('📎 setAssistantDocuments avec :', new Set([...assistantDocuments, ...validDocs.map(doc => doc.id)]));
+
 
     }
   }
@@ -258,6 +263,18 @@ const handleUploadDocuments = async (files) => {
     );
   }
 
+  function wasDocumentUsed(assistantReply, contextText) {
+    const cleanedContext = contextText.toLowerCase().replace(/[.,;:!?()\n]/g, ' ');
+    const cleanedReply = assistantReply.toLowerCase().replace(/[.,;:!?()\n]/g, ' ');
+
+    const keywords = cleanedContext.split(/\s+/).filter(word => word.length > 5);
+    let matches = 0;
+    for (let word of keywords) {
+      if (cleanedReply.includes(word)) matches++;
+      if (matches >= 3) return true;
+    }
+    return false;
+  }
   
   const handleSend = async () => {
     if (uploading) {
@@ -274,16 +291,27 @@ const handleUploadDocuments = async (files) => {
       let contextText = '';
       const t1 = performance.now();
 
+      const docIds = Array.from(new Set(
+        assistantDocuments
+          .map(doc => typeof doc === 'object' && doc !== null ? doc.id : doc)
+          .filter(id => typeof id === 'number' || /^[0-9]+$/.test(id))
+      ));
+
       if (assistantDocuments?.length) {
 
         console.log('📚 assistantDocuments:', assistantDocuments);
-        const docs = await getDocumentsByIds(assistantDocuments);
+        const docs = await getDocumentsByIds(docIds);
         console.log('📦 docs récupérés :', docs);
 
         const texts = docs
-          .filter(Boolean)
-          .map(doc => doc.content || doc.summary || doc.text || '');
-        contextText = texts.filter(Boolean).join('\n\n');
+        .filter(Boolean)
+        .map(doc => {
+          const name = doc.name?.replace(/\.(pdf|txt|md|json)$/i, '') || `Document ${doc.id}`;
+          const content = doc.content || doc.summary || doc.text || '';
+          return `### 📄 ${name}\n\n${content}`;
+        });
+
+      contextText = texts.filter(Boolean).join('\n\n---\n\n');
 
         console.log('📄 CONTEXTE FINAL (longueur)', contextText.length);
         console.log('📄 CONTEXTE (début)', contextText.slice(0, 300));
@@ -339,6 +367,8 @@ const handleUploadDocuments = async (files) => {
 
 
       let assistantReply = assistantReplyRaw;
+      const docUsed = wasDocumentUsed(assistantReply, contextText);
+      console.log('📎 Document utilisé ? =>', docUsed);
 
 
       for (const { agentId, prompt: agentPrompt, raw } of agentCommands) {
@@ -401,7 +431,7 @@ const handleUploadDocuments = async (files) => {
       setMessagesHistory(prev => [
         ...prev.slice(-28),
         { role: 'user', content: prompt },
-        { role: 'assistant', content: assistantReply }
+        { role: 'assistant', content: assistantReply, docUsed }
       ]);
 
       setAssistants(prev =>
@@ -487,6 +517,9 @@ const handleUploadDocuments = async (files) => {
 
               return (
                 <div key={index} className={`chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+                {msg.role === 'assistant' && msg.docUsed && (
+                  <div className="chat-badge">📎 Basé sur un document</div>
+                )}
                   <div className="chat-meta">
                     <strong>
                       {msg.role === 'user' ? (
