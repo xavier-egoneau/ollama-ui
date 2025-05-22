@@ -1,13 +1,13 @@
 {
   "image": {
-  "description": "Génère des images",
-  "enrichWithLLM": true,
-  "outputType": "image",
-  "execution": "post",
-  "enabledByDefault": false,
-  "defaultPrompt": "Génère une image à partir d'une description visuelle complète.",
- "systemInstructions": "### 🎨 Pour `--image` :\n\nTu peux générer une image à partir d'une description visuelle précise.\n\nUn bon prompt pour une image doit idéalement contenir :\n\n- ✅ Un sujet principal (ex : un chat, un paysage, une scène…)\n- ✅ Un style (ex : photoréaliste, Ghibli, peinture à l’huile, manga…)\n- ✅ Un décor ou une ambiance (ex : forêt enchantée, salon haussmannien…)\n- ✅ Une lumière (ex : dorée, tamisée, contre-jour, néon…)\n- ✅ Des détails visuels (ex : ultra détaillé, flou artistique, 8K…)\n\n🧠 Tu peux réfléchir à ces éléments pour enrichir ton idée, mais au final tu dois **écrire une seule ligne propre** comme ceci :\n\n```\n--image un panda en armure dans une forêt de bambous, style Ghibli, lumière dorée, ultra détaillé\n```\n\n❌ Ne copie jamais \"Sujet :\", \"Style :\", etc.\n✅ Commence directement par `--image` suivi de ton prompt complet."
-},
+    "description": "Génère des images",
+    "enrichWithLLM": true,
+    "outputType": "image",
+    "execution": "post",
+    "enabledByDefault": false,
+    "defaultPrompt": "Génère une image à partir d'une description visuelle complète.",
+  "systemInstructions": "### 🎨 Pour `--image` :\n\nTu peux générer une image à partir d'une description visuelle précise.\n\nUn bon prompt pour une image doit idéalement contenir :\n\n- ✅ Un sujet principal (ex : un chat, un paysage, une scène…)\n- ✅ Un style (ex : photoréaliste, Ghibli, peinture à l’huile, manga…)\n- ✅ Un décor ou une ambiance (ex : forêt enchantée, salon haussmannien…)\n- ✅ Une lumière (ex : dorée, tamisée, contre-jour, néon…)\n- ✅ Des détails visuels (ex : ultra détaillé, flou artistique, 8K…)\n\n🧠 Tu peux réfléchir à ces éléments pour enrichir ton idée, mais au final tu dois **écrire une seule ligne propre** comme ceci :\n\n```\n--image un panda en armure dans une forêt de bambous, style Ghibli, lumière dorée, ultra détaillé\n```\n\n❌ Ne copie jamais \"Sujet :\", \"Style :\", etc.\n✅ Commence directement par `--image` suivi de ton prompt complet."
+  },
   "calc": {
     "description": "Calcul mathématique",
     "enrichWithLLM": false,
@@ -16,5 +16,16 @@
     "enabledByDefault": true,
     "defaultPrompt": "Effectue un calcul numérique.",
     "exampleUsage": "--calc 8 * (3 + 1)"
+  },
+  "code": {
+    "description": "Exécute du code Python",
+    "enrichWithLLM": false,
+    "outputType": "texte",
+    "execution": "inline",
+    "enabledByDefault": false,
+    "defaultPrompt": "Exécute le code Python donné et renvoie la sortie.",
+    "exampleUsage": "--code print(2 + 2)"
   }
+
+
 }
